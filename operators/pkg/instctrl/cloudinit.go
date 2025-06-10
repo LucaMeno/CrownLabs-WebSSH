@@ -172,5 +172,12 @@ func (r *InstanceReconciler) GetPublicKeys(ctx context.Context) ([]string, error
 		}
 	}
 
+	// add the webssh componet public key
+	if r.WebSSHMastetPublicKey == nil {
+		log.V(utils.LogDebugLevel).Info("no web public webssh master key found. It will be ignored.")
+	} else {
+		publicKeys = append(publicKeys, string(r.WebSSHMastetPublicKey))
+	}
+
 	return publicKeys, nil
 }
