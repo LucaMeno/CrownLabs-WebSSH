@@ -11,10 +11,13 @@ require (
 	github.com/dustinkirkland/golang-petname v0.0.0-20231002161417-6a283f1aaaf2
 	github.com/go-logr/logr v1.4.2
 	github.com/go-resty/resty/v2 v2.12.0
+	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/golang/mock v1.6.0
+	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/onsi/ginkgo/v2 v2.23.3
 	github.com/onsi/gomega v1.37.0
 	github.com/prometheus/client_golang v1.22.0
+	golang.org/x/crypto v0.36.0
 	golang.org/x/text v0.23.0
 	google.golang.org/grpc v1.68.1
 	google.golang.org/protobuf v1.36.5
