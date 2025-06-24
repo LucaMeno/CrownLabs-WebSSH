@@ -1,6 +1,7 @@
 import { type FC, type SetStateAction, useContext, useState } from 'react';
 import { Dropdown } from 'antd';
 import { Button } from 'antd';
+import { Link } from 'react-router-dom';
 import {
   ExportOutlined,
   CodeOutlined,
@@ -103,6 +104,8 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
 
   const connectDisabled = status !== Phase.Ready || (isContainer && !gui);
 
+  const ENV_PLACEHOLDER = "env";
+
   return (
     <Dropdown
       trigger={['click']}
@@ -116,24 +119,22 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
             onClick: gui
               ? () => window.open(url!, '_blank')
               : () => setSshModal(true),
-            className: `flex items-center sm:hidden ${
-              !connectDisabled
-                ? extended
-                  ? 'primary-color-fg'
-                  : 'success-color-fg xs:hidden'
-                : 'pointer-events-none'
-            }`,
+            className: `flex items-center sm:hidden ${!connectDisabled
+              ? extended
+                ? 'primary-color-fg'
+                : 'success-color-fg xs:hidden'
+              : 'pointer-events-none'
+              }`,
           },
           persistent
             ? {
-                key: 'persistent',
-                label: menuText,
-                icon: menuIcon,
-                onClick: () => menuAction,
-                className: `flex items-center ${
-                  extended ? ' sm:hidden' : 'xs:hidden'
+              key: 'persistent',
+              label: menuText,
+              icon: menuIcon,
+              onClick: () => menuAction,
+              className: `flex items-center ${extended ? ' sm:hidden' : 'xs:hidden'
                 }`,
-              }
+            }
             : null,
           {
             type: 'divider',
@@ -141,13 +142,30 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
           },
           {
             key: 'ssh',
-            label: 'SSH',
             icon: <CodeOutlined style={font20px} />,
-            onClick: () => setSshModal(true),
-            className: `flex items-center ${
-              extended ? 'xl:hidden' : ''
-            } ${sshDisabled ? 'pointer-events-none' : ''}`,
             disabled: sshDisabled,
+            label: (
+              <>
+                SSH
+                <Link 
+                  to={`/instance/${instance.tenantNamespace}/${instance.name}/${ENV_PLACEHOLDER}/ssh`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Button type="link"
+                    className='ml-3'
+                    icon={<ExportOutlined />}
+                    variant='solid'
+                    color='primary'
+                    shape='circle'
+                    size='small'>
+                  </Button>
+                </Link>
+              </>
+            ),
+            onClick: () => setSshModal(true),
+            className: `flex items-center ${extended ? 'xl:hidden' : ''} ${sshDisabled ? 'pointer-events-none' : ''}`,
           },
           {
             key: 'upload',
@@ -159,7 +177,7 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
             icon: <FolderOpenOutlined style={font20px} />,
             disabled: fileManagerDisabled,
             className: `flex items-center ${extended ? 'xl:hidden' : ''} `,
-            onClick: () => {},
+            onClick: () => { },
           },
           {
             type: 'divider',
@@ -177,21 +195,19 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
                   tenantNamespace: tenantNamespace!,
                 },
               }),
-            className: `flex items-center ${
-              extended ? ' sm:hidden' : 'xs:hidden'
-            }`,
+            className: `flex items-center ${extended ? ' sm:hidden' : 'xs:hidden'
+              }`,
           },
         ],
       }}
     >
       <Button
-        className={`${
-          extended
-            ? !sshDisabled || fileManager
-              ? 'xl:hidden'
-              : 'sm:hidden'
-            : ''
-        } flex justify-center items-center`}
+        className={`${extended
+          ? !sshDisabled || fileManager
+            ? 'xl:hidden'
+            : 'sm:hidden'
+          : ''
+          } flex justify-center items-center`}
         color="default"
         type="link"
         shape="circle"

@@ -1,0 +1,23 @@
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+.ssh-terminal {
+  position: fixed;
+  top: var(--navbar-h, 64px);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #000;
+  overflow: hidden;
+  z-index: 1; 
+}
+
+.ssh-terminal .xterm { width: 100%; height: 100%; }
+.ssh-terminal .xterm-viewport { overflow: hidden !important; }
+
+
