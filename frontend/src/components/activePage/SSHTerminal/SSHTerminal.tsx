@@ -1,13 +1,11 @@
 import React, { useEffect, useContext } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useXTerm } from 'react-xtermjs';
 import { AuthContext } from '../../../contexts/AuthContext';
 import './SSHTerminal.css';
 
 const SSHTerminal: React.FC = () => {
   const { namespace = '', VMname: nomeVM = '' } = useParams();
-  const [searchParams] = useSearchParams();
-  const prettyName = searchParams.get('prettyName') ?? '';
   const { ref, instance } = useXTerm();
   const { token } = useContext(AuthContext);
 
@@ -19,7 +17,6 @@ const SSHTerminal: React.FC = () => {
       scrollback: 10000,
       theme: {
         background: '#000000',
-        foreground: '#ffffff',
       },
     };
 
@@ -36,8 +33,8 @@ const SSHTerminal: React.FC = () => {
         })
       );
 
-      if (prettyName)
-        instance.writeln(`\x1b[1;36m📡 Connecting to: ${prettyName}\x1b[0m`);
+      
+      instance.writeln(`\x1b[1;36m📡 Connecting to VM \x1b[0m`);
       instance.writeln('[✔] SSH connection success.\r\n');
     };
 
@@ -63,7 +60,7 @@ const SSHTerminal: React.FC = () => {
       ws.close();
       instance.dispose();
     };
-  }, [instance, namespace, nomeVM, prettyName, token]);
+  }, [instance, namespace, nomeVM, token]);
 
   return <div ref={ref} className="ssh-terminal" />;
 };
