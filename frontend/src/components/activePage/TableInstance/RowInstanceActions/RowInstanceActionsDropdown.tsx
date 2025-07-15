@@ -140,32 +140,16 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
           {
             key: 'ssh',
             icon: <CodeOutlined style={font20px} />,
+            disabled: sshDisabled,
             label: (
-              <span className="flex items-center gap-2">
-                <span className={sshDisabled ? 'text-gray-400' : ''}>SSH</span>
-                <ExportOutlined
-                  title="Open terminal"
-                  onClick={(e) => {
-                    if (sshDisabled) return; // blocca il click se disabilitato
-                    e.stopPropagation(); // evita il click principale
-                    window.open(
-                      `/instance/${instance.tenantNamespace}/${instance.name}/${encodeURIComponent(instance.prettyName ?? '')}/ssh`,
-                      '_blank',
-                      'noopener,noreferrer'
-                    );
-
-                  }}
-                  className={
-                    sshDisabled
-                      ? 'text-gray-400 cursor-not-allowed'
-                      : 'cursor-pointer text-blue-400 hover:text-blue-600'
-                  }
-                />
-              </span>
+              <>
+                SSH
+                <Button type="link" className='ml-3' target='_blank' href={`/instance/${instance.tenantNamespace}/${instance.name}/ssh`} icon={<ExportOutlined />} variant='solid' color='primary' shape='circle' size='small' onClick={(e) => e.stopPropagation()}>
+                </Button>
+              </>
             ),
             onClick: () => setSshModal(true),
             className: `flex items-center ${extended ? 'xl:hidden' : ''} ${sshDisabled ? 'pointer-events-none' : ''}`,
-            disabled: sshDisabled,
           },
           {
             key: 'upload',

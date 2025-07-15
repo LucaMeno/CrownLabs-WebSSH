@@ -39,7 +39,7 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
   const currentName = routesData.find(r => r.path === currentPath)?.name || '';
 
   const isSSHRoute = /^\/instance\/[^/]+\/[^/]+\/[^/]+\/ssh$/.test(currentPath);
-  
+
   const buttons = routes.map((b, i) => {
     const routeData = b.route;
     const isExtLink = routeData.path.indexOf('http') === 0;
@@ -197,6 +197,18 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
             />
           </div>
         </Header>
+      )}
+      {isHeightTooSmall && (
+        <div className="fixed top-4 right-4 z-50">
+          <Button
+            className="flex items-center"
+            shape="round"
+            size="large"
+            type="primary"
+            onClick={() => setShow(true)}
+            icon={<MenuOutlined />}
+          />
+        </div>
       )}
       <Drawer
         className={
