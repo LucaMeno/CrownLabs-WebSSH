@@ -38,7 +38,7 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
 
   const currentName = routesData.find(r => r.path === currentPath)?.name || '';
 
-  const isSSHRoute = /^\/instance\/[^/]+\/[^/]+\/[^/]+\/ssh$/.test(currentPath);
+  const isSSHRoute = /^\/instance\/[^/]+\/[^/]+\/ssh$/.test(currentPath);
 
   const buttons = routes.map((b, i) => {
     const routeData = b.route;
