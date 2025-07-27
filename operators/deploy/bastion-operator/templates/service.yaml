@@ -27,7 +27,7 @@ kind: Service
 metadata:
   name: {{ include "bastion-operator.fullname" . }}-webssh
   labels:
-    {{- include "bastion-operator.labels" . | nindent 4 }}
+    {{- include "webssh.labels" . | nindent 4 }}
     app.kubernetes.io/component: webssh
 spec:
   type: {{ .Values.webSshService.type }}
@@ -37,5 +37,5 @@ spec:
       protocol: TCP
       name: webssh
   selector:
-    {{- include "bastion-operator.selectorLabels" . | nindent 4 }}
+    {{- include "webssh.selectorLabels" . | nindent 4 }}
 {{- end }}
