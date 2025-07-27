@@ -4,8 +4,7 @@ kind: Ingress
 metadata:
   name: {{ include "bastion-operator.fullname" . }}-webssh
   labels:
-    {{- include "bastion-operator.labels" . | nindent 4 }}
-    app.kubernetes.io/component: webssh
+    {{- include "webssh.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
