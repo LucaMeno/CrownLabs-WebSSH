@@ -18,15 +18,17 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
 	"strconv"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"k8s.io/klog/v2"
 
+	"github.com/go-logr/stdr"
 	crownlabsv1alpha1 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha1"
 	crownlabsv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
+	"github.com/netgroup-polito/CrownLabs/operators/pkg/utils"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/webssh"
 )
 
@@ -41,33 +43,40 @@ func init() {
 }
 
 func main() {
-
 	sshUserFlag := flag.String("websshuser", "crownlabs", "The user to use for SSH connections.")
 	websshprivatekeypathFlag := flag.String("websshprivatekeypath", "", "The path to the private key file for SSH authentication.")
-	websshtimeoutdurationFlag := flag.String("websshtimeoutduration", "30", "The timeout duration for SSH connections.")
+	websshtimeoutdurationFlag := flag.String("websshtimeoutduration", "30", "The timeout duration for SSH connections. In minutes.")
 	websshmaxconncountFlag := flag.String("websshmaxconncount", "1000", "The maximum number of concurrent SSH connections.")
 	websshvmport := flag.String("websshvmport", "22", "The default SSH port for VMs.")
 	websshwebsocketportFlag := flag.String("websshwebsocketport", "8085", "The port on which the WebSocket server listens.")
 
-	timeout, err := strconv.Atoi(*websshtimeoutdurationFlag)
+	timeout64, err := strconv.ParseInt(*websshtimeoutdurationFlag, 10, 32) // parse directly as int32
 	if err != nil {
-		timeout = 30
-		log.Println("WEBSSH_TIMEOUT_DURATION is not a valid integer, using default value: ", timeout)
+		timeout64 = 30
 	}
 
-	maxConn, err := strconv.Atoi(*websshmaxconncountFlag)
+	maxConn64, err := strconv.ParseInt(*websshmaxconncountFlag, 10, 32)
 	if err != nil {
-		maxConn = 1000
-		log.Println("WEBSSH_MAX_CONN_COUNT is not a valid integer, using default value: ", maxConn)
+		maxConn64 = 1000
 	}
 
-	klog.Info("Starting WebSocket SSH bridge")
-	webssh.StartWebSSH(&webssh.Config{
-		SSHUser:            *sshUserFlag,
-		PrivateKeyPath:     *websshprivatekeypathFlag,
-		TimeoutDuration:    timeout,
-		MaxConnectionCount: maxConn,
-		WebsocketPort:      *websshwebsocketportFlag,
-		VMSSHPort:          *websshvmport,
-	})
+	stdLogger := log.New(os.Stderr, "", log.LstdFlags)
+	baseLogger := stdr.New(stdLogger)
+
+	webSSHCtx := &webssh.WebsshServerContext{}
+	webSSHCtx.BaseLogger = baseLogger
+	webSSHCtx.SSHUser = *sshUserFlag
+	webSSHCtx.PrivateKeyPath = *websshprivatekeypathFlag
+	webSSHCtx.TimeoutDuration = int32(timeout64)
+	webSSHCtx.MaxConnectionCount = int32(maxConn64)
+	webSSHCtx.WebsocketPort = *websshwebsocketportFlag
+	webSSHCtx.VMSSHPort = *websshvmport
+	webSSHCtx.BaseConfig, err = utils.GetRestConfig()
+
+	if err != nil {
+		webSSHCtx.BaseLogger.Error(err, "Failed to get REST config")
+		return
+	}
+
+	webSSHCtx.StartWebSSH()
 }

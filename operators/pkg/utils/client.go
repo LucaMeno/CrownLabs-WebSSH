@@ -83,3 +83,8 @@ func NewK8sClientWithConfig(kubeconfig *rest.Config) (client.Client, error) {
 
 	return client.New(restcfg.SetRateLimiter(kubeconfig), client.Options{Scheme: scheme})
 }
+
+// get the basic Kubernetes REST config
+func GetRestConfig() (*rest.Config, error) {
+	return ctrl.GetConfig()
+}

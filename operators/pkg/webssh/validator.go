@@ -22,11 +22,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v4"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
@@ -40,23 +38,22 @@ type clientInitMessage struct {
 }
 
 // GetInstance retrieves an Instance CR by namespace and name.
-func GetInstance(token, namespace, instanceName string) (*clv1alpha2.Instance, error) {
-	// create the Kubernetes client configuration
-	config := &rest.Config{
-		Host:        "https://apiserver.crownlabs.polito.it",
-		BearerToken: token,
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: false,
-		},
+func (webCtx *WebsshServerContext) GetInstance(ctx context.Context, token, namespace, instanceName string) (*clv1alpha2.Instance, error) {
+	if webCtx.BaseConfig == nil {
+		return nil, errors.New("baseConfig is not initialized")
 	}
 
-	k8sClient, err := utils.NewK8sClientWithConfig(config)
+	webCtx.mtxConfig.Lock()
+	defer webCtx.mtxConfig.Unlock()
+
+	webCtx.BaseConfig.BearerToken = token
+	k8sClient, err := utils.NewK8sClientWithConfig(webCtx.BaseConfig)
 	if err != nil {
 		return nil, errors.New("failed to create Kubernetes client: " + err.Error())
 	}
 
 	instance := &clv1alpha2.Instance{}
-	err = k8sClient.Get(context.TODO(), client.ObjectKey{
+	err = k8sClient.Get(ctx, client.ObjectKey{
 		Namespace: namespace,
 		Name:      instanceName,
 	}, instance)
@@ -65,6 +62,7 @@ func GetInstance(token, namespace, instanceName string) (*clv1alpha2.Instance, e
 		return nil, errors.New("failed to get instance: " + err.Error())
 	}
 
+	webCtx.BaseConfig.BearerToken = "" // Clear the token after use
 	return instance, nil
 }
 
@@ -82,45 +80,41 @@ func extractUsernameFromToken(tokenString string) (string, error) {
 	return "", errors.New("username not found in token claims")
 }
 
-func validateRequest(firstMsg []byte) (ip, username string, err error) {
+func (webCtx *WebsshServerContext) validateRequest(firstMsg []byte, localCtx *LocalContext) error {
 	var initMsg clientInitMessage
 	if err := json.Unmarshal(firstMsg, &initMsg); err != nil {
-		return "", "", errors.New("invalid JSON format")
+		return errors.New("invalid JSON format")
 	}
 
-	if initMsg.VMName == "" || initMsg.Token == "" {
-		return "", "", errors.New("missing required fields in the initialization message")
+	if initMsg.VMName == "" || initMsg.Token == "" || initMsg.Namespace == "" {
+		return errors.New("missing required fields in the initialization message")
 	}
 
 	// Extract username from the token
-	username, err = extractUsernameFromToken(initMsg.Token)
+	username, err := extractUsernameFromToken(initMsg.Token)
 	if err != nil {
-		return "", "", errors.New("invalid token format: " + err.Error())
+		return errors.New("invalid token format: " + err.Error())
 	}
-
-	// Get the namespace from the message, or derive it from the token
-	namespace := initMsg.Namespace
-	if namespace == "" {
-		namespace = "tenant-" + username
-	}
-
-	log.Println("Validating request: ", "user:", username, " namespace:", namespace, " vmName:", initMsg.VMName)
 
 	// get the instance by name and namespace
-	instance, err := GetInstance(initMsg.Token, namespace, initMsg.VMName)
+	instance, err := webCtx.GetInstance(localCtx.mainCtx, initMsg.Token, initMsg.Namespace, initMsg.VMName)
 	if err != nil {
-		return "", "", errors.New("failed to get instance: " + err.Error())
+		return errors.New("failed to get instance: " + err.Error())
 	}
 
-	// Extract the IP address from the instance object
-	if !instance.Spec.Running {
-		return "", "", errors.New("instance is not running")
+	// check if the instance is running
+	if instance.Status.Phase != clv1alpha2.EnvironmentPhaseReady {
+		return errors.New("instance is not running")
 	}
 
 	// extract the IP address from the instance status
 	if instance.Status.IP == "" {
-		return "", "", errors.New("instance has no IP address assigned")
+		return errors.New("instance has no IP address assigned")
 	}
 
-	return instance.Status.IP, username, nil
+	localCtx.namespace = initMsg.Namespace
+	localCtx.username = username
+	localCtx.ip = instance.Status.IP
+
+	return nil
 }

@@ -17,32 +17,49 @@
 package webssh
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/gorilla/websocket"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/crypto/ssh"
+	"k8s.io/client-go/rest"
 )
 
-type Config struct {
-	// the user to use for SSH connections
-	SSHUser string
-	// the path to the private key file for SSH authentication
-	PrivateKeyPath string
-	// TimeoutDuration is the duration in seconds after which an SSH connection is considered idle and closed
-	TimeoutDuration int
-	// MaxConnectionCount is the maximum number of concurrent SSH connections allowed
-	MaxConnectionCount int
-	// WebsocketPort is the port on which the WebSocket server listens
-	WebsocketPort string
-	// VMSSHPort is the default SSH port for VMs
-	VMSSHPort string
+// WebsshServerContext holds the context for the WebSSH server.
+type WebsshServerContext struct {
+	SSHUser            string       // the user to use for SSH connections
+	PrivateKeyPath     string       // the path to the private key file for SSH authentication
+	TimeoutDuration    int32        // TimeoutDuration is the duration in seconds after which an SSH connection is considered idle and closed
+	MaxConnectionCount int32        // MaxConnectionCount is the maximum number of concurrent SSH connections allowed
+	WebsocketPort      string       // WebsocketPort is the port on which the WebSocket server listens
+	VMSSHPort          string       // VMSSHPort is the default SSH port for VMs
+	BaseConfig         *rest.Config // config base with all the standard Kubernetes API settings
+	mtxConfig          sync.Mutex   // mutex to protect access to config (while changing token)
+	activeConnCount    int32        // active connection count
+	BaseLogger         logr.Logger  // logger for the base context
+}
+
+// LocalContext holds the context for a local WebSSH connection.
+type LocalContext struct {
+	log          logr.Logger     // logger for the local context
+	connTimedOut int32           // connection timeout status
+	connStarted  bool            // connection started status
+	lastUsed     atomic.Value    // last used timestamp
+	username     string          // username for the connection
+	ip           string          // IP address of the VM
+	namespace    string          // namespace of the VM
+	errorMsg     string          // error to send to the client
+	mainCtx      context.Context // main context for the connection
 }
 
 var (
@@ -66,8 +83,8 @@ var (
 	}
 )
 
-func loadPrivateKey(path string) (ssh.Signer, error) {
-	cleanPath := filepath.Clean(path)
+func (webCtx *WebsshServerContext) loadPrivateKey() (ssh.Signer, error) {
+	cleanPath := filepath.Clean(webCtx.PrivateKeyPath)
 	keyPriv, err := os.ReadFile(cleanPath)
 	if err != nil {
 		err = errors.New("failed to read private key file: " + err.Error() + " at path: " + cleanPath)
@@ -77,13 +94,15 @@ func loadPrivateKey(path string) (ssh.Signer, error) {
 	return ssh.ParsePrivateKey(keyPriv)
 }
 
-func returnError(ws *websocket.Conn, errMsg string) {
-	if err := ws.WriteMessage(websocket.TextMessage, []byte(errMsg)); err != nil {
-		log.Println("WebSocket error:", "error", err)
-	}
+func (lc *LocalContext) logger() logr.Logger {
+	return lc.log.WithValues(
+		"username", lc.username,
+		"ip", lc.ip,
+		"namespace", lc.namespace,
+	)
 }
 
-func wsHandler(w http.ResponseWriter, r *http.Request, config *Config) {
+func (webCtx *WebsshServerContext) wsHandler(w http.ResponseWriter, r *http.Request) {
 	// upgrade to the WebSocket
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -91,43 +110,75 @@ func wsHandler(w http.ResponseWriter, r *http.Request, config *Config) {
 		return
 	}
 
+	localCtx := &LocalContext{
+		log:          webCtx.BaseLogger.WithValues(),
+		connTimedOut: 0,
+		connStarted:  false,
+		username:     "",
+		ip:           "",
+		namespace:    "",
+		lastUsed:     atomic.Value{},
+		mainCtx:      r.Context(),
+	}
+
+	localCtx.logger().Info("New WebSocket connection established")
+
 	defer func() {
-		if err := ws.Close(); err != nil {
-			log.Println("Failed to close WebSocket connection:", "error", err)
+		if localCtx.connStarted {
+			atomic.AddInt32(&webCtx.activeConnCount, -1)
+		}
+
+		if atomic.LoadInt32(&localCtx.connTimedOut) == 0 {
+			if localCtx.errorMsg != "" {
+				if err := ws.WriteMessage(websocket.TextMessage, []byte(localCtx.errorMsg)); err != nil {
+					localCtx.logger().Error(err, "WebSocket error")
+				}
+			}
+			if err := ws.Close(); err != nil {
+				localCtx.logger().Error(err, "Failed to close WebSocket connection")
+			}
 		}
 	}()
 
 	// wait for the first message to get the token
 	_, firstMsg, err := ws.ReadMessage()
 	if err != nil {
-		log.Println("ReadMessage error:", "error", err)
-		returnError(ws, "Error reading initial message")
+		localCtx.logger().Error(err, "ReadMessage error")
+		localCtx.errorMsg = "Failed to read initialization message"
 		return
 	}
 
-	// Validate the req
-	ip, username, err := validateRequest(firstMsg)
+	// Validate the request
+	err = webCtx.validateRequest(firstMsg, localCtx)
 	if err != nil {
-		log.Println("Request validation failed:", "error", err)
-		returnError(ws, "Invalid request")
+		localCtx.logger().Error(err, "Request validation failed")
+		localCtx.errorMsg = "Invalid request"
 		return
 	}
 
 	// log the connection
-	webSSHConnections.WithLabelValues(ip, config.VMSSHPort).Inc()
+	webSSHConnections.WithLabelValues(localCtx.ip, webCtx.VMSSHPort).Inc()
+
+	// check the number of connection
+	n := atomic.LoadInt32(&webCtx.activeConnCount)
+	if n >= webCtx.MaxConnectionCount {
+		localCtx.logger().Error(err, "Max connection limit reached")
+		localCtx.errorMsg = "Max connection limit reached"
+		return
+	}
+	atomic.AddInt32(&webCtx.activeConnCount, 1)
+	localCtx.connStarted = true
 
 	// Load the private key for SSH authentication
-	signer, err := loadPrivateKey(config.PrivateKeyPath)
+	signer, err := webCtx.loadPrivateKey()
 	if err != nil {
-		log.Println("Failed to load private key:", "error", err)
-		returnError(ws, "Internal server error")
+		localCtx.logger().Error(err, "Failed to load private key")
+		localCtx.errorMsg = "Internal server error"
 		return
 	}
 
-	conKey := connectionKey{vmIP: ip, username: username}
-
 	sshConfig := &ssh.ClientConfig{
-		User: config.SSHUser,
+		User: webCtx.SSHUser,
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
@@ -141,24 +192,25 @@ func wsHandler(w http.ResponseWriter, r *http.Request, config *Config) {
 		Timeout:         10 * time.Second,
 	}
 
-	sshConn, err := getOrCreateSSHConnection(conKey, config.VMSSHPort, sshConfig, config.MaxConnectionCount)
+	connString := localCtx.ip + ":" + webCtx.VMSSHPort
+	sshConn, err := ssh.Dial("tcp", connString, sshConfig)
 	if err != nil {
-		log.Println("Failed to get or create SSH connection", "error", err)
-		returnError(ws, "Failed to connect to the SSH server")
+		localCtx.logger().Error(err, "Failed to establish SSH connection")
+		localCtx.errorMsg = "Internal server error"
 		return
 	}
 
 	session, err := sshConn.NewSession()
 	if err != nil {
-		log.Println("Failed to create SSH session", "error", err)
-		returnError(ws, "Internal server error")
+		localCtx.logger().Error(err, "Failed to create SSH session")
+		localCtx.errorMsg = "Internal server error"
 		return
 	}
 
 	defer func() {
 		if err := session.Close(); err != nil {
-			log.Println("Failed to close SSH session:", "error", err)
-			returnError(ws, "Internal server error")
+			localCtx.logger().Error(err, "Failed to close SSH session")
+			localCtx.errorMsg = "Internal server error"
 		}
 	}()
 
@@ -169,29 +221,48 @@ func wsHandler(w http.ResponseWriter, r *http.Request, config *Config) {
 	}
 
 	if err := session.RequestPty("xterm", 40, 80, modes); err != nil {
-		log.Println("Request for pseudo terminal failed:", "error", err)
-		returnError(ws, "Internal server error")
+		localCtx.logger().Error(err, "Request for pseudo terminal failed")
+		localCtx.errorMsg = "Internal server error"
 		return
 	}
 
 	stdin, err := session.StdinPipe()
 	if err != nil {
-		log.Println("Unable to setup stdin for session:", "error", err)
-		returnError(ws, "Internal server error")
+		localCtx.logger().Error(err, "Unable to setup stdin for session")
+		localCtx.errorMsg = "Internal server error"
 		return
 	}
 	stdout, err := session.StdoutPipe()
 	if err != nil {
-		log.Println("Unable to setup stdout for session:", "error", err)
-		returnError(ws, "Internal server error")
+		localCtx.logger().Error(err, "Unable to setup stdout for session")
+		localCtx.errorMsg = "Internal server error"
 		return
 	}
 
 	if err := session.Shell(); err != nil {
-		log.Println("Failed to start shell:", "error", err)
-		returnError(ws, "Internal server error")
+		localCtx.logger().Error(err, "Failed to start shell")
+		localCtx.errorMsg = "Internal server error"
 		return
 	}
+
+	localCtx.logger().Info("SSH session started")
+
+	localCtx.lastUsed.Store(time.Now())
+
+	go func() {
+		for {
+			time.Sleep(time.Duration(10))
+			if time.Since(localCtx.lastUsed.Load().(time.Time)) > time.Duration(webCtx.TimeoutDuration)*time.Minute {
+				atomic.StoreInt32(&localCtx.connTimedOut, 1)
+				localCtx.logger().Info("Connection timed out due to inactivity")
+				localCtx.errorMsg = "Connection timed out due to inactivity"
+				if err := ws.Close(); err != nil {
+					localCtx.logger().Error(err, "Failed to close WebSocket connection goroutine")
+				}
+				break
+			}
+		}
+	}()
 
 	// Start a goroutine to read from SSH stdout and write to WebSocket
 	// from VM to user
@@ -199,15 +270,20 @@ func wsHandler(w http.ResponseWriter, r *http.Request, config *Config) {
 		buf := make([]byte, 1024)
 		for {
 			n, err := stdout.Read(buf)
+			if atomic.LoadInt32(&localCtx.connTimedOut) == 1 {
+				break
+			}
 			if err != nil {
 				if err != io.EOF {
-					log.Println("SSH stdout read error:", "error", err)
+					localCtx.logger().Error(err, "SSH stdout read error")
+					localCtx.errorMsg = "SSH session error"
 				}
 				break
 			}
-			updateSSHConnectionLastUsed(conKey) // reset timer on shell output
+			localCtx.lastUsed.Store(time.Now())
+
 			if err := ws.WriteMessage(websocket.TextMessage, buf[:n]); err != nil {
-				log.Println("WebSocket write error:", "error", err)
+				localCtx.logger().Error(err, "WebSocket write error")
 				break
 			}
 		}
@@ -217,40 +293,35 @@ func wsHandler(w http.ResponseWriter, r *http.Request, config *Config) {
 	// from user to VM
 	for {
 		_, msg, err := ws.ReadMessage()
-		if err != nil {
-			log.Println("Closing SSH session, WebSocket read error:", "error", err)
-			_ = closeSSHConnection(conKey)
-			break
-		}
-		updateSSHConnectionLastUsed(conKey) // reset timer on user input
-		if _, err := stdin.Write(msg); err != nil {
-			log.Println("SSH stdin write error:", "error", err)
-			returnError(ws, "Failed to write to SSH session")
-			break
-		}
-	}
-}
 
-func wsHandlerWrapper(config *Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		wsHandler(w, r, config)
+		if atomic.LoadInt32(&localCtx.connTimedOut) == 1 {
+			break
+		}
+
+		localCtx.lastUsed.Store(time.Now())
+		if err != nil {
+			localCtx.logger().Error(err, "Closing SSH session, WebSocket read error")
+			break
+		}
+		if _, err := stdin.Write(msg); err != nil {
+			localCtx.logger().Error(err, "SSH stdin write error")
+			localCtx.errorMsg = "Failed to write to SSH session"
+			break
+		}
 	}
 }
 
 // StartWebSSH initializes the WebSocket SSH bridge server.
 // It loads the configuration, sets up the HTTP server, and starts listening for WebSocket connections.
-func StartWebSSH(config *Config) {
-	// automatic Cleanup
-	startConnectionCleanup(2*time.Minute, time.Duration(config.TimeoutDuration)*time.Second)
-
+func (webCtx *WebsshServerContext) StartWebSSH() {
 	// Set up the HTTP server with the WebSocket handler
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ws", wsHandlerWrapper(config))
+	mux.HandleFunc("/ws", webCtx.wsHandler)
 
-	log.Println("WebSocket SSH bridge running on :", config.WebsocketPort)
+	webCtx.BaseLogger.Info("WebSSH server started on port: " + webCtx.WebsocketPort)
 
 	server := &http.Server{
-		Addr:         ":" + config.WebsocketPort,
+		Addr:         ":" + webCtx.WebsocketPort,
 		Handler:      mux,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -258,6 +329,6 @@ func StartWebSSH(config *Config) {
 	}
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Println("HTTP server failed:", "error", err)
+		webCtx.BaseLogger.Error(err, "HTTP server failed")
 	}
 }
