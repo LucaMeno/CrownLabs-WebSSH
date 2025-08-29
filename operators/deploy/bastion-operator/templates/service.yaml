@@ -21,7 +21,7 @@ spec:
 
 ---
 
-{{- if .Values.webSshService }}
+{{- if .Values.webssh.service }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -30,10 +30,10 @@ metadata:
     {{- include "webssh.labels" . | nindent 4 }}
     app.kubernetes.io/component: webssh
 spec:
-  type: {{ .Values.webSshService.type }}
+  type: {{ .Values.webssh.service.type }}
   ports:
-    - port: {{ .Values.webSshService.port }}
-      targetPort: {{ .Values.webSshService.targetPort }}
+    - port: {{ .Values.webssh.service.port }}
+      targetPort: {{ .Values.webssh.service.targetPort }}
       protocol: TCP
       name: webssh
   selector:

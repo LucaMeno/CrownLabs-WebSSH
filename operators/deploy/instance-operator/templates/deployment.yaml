@@ -81,7 +81,7 @@ spec:
       volumes:
         - name: webbastion-master-key
           secret:
-            secretName: {{ .Values.webBastionMasterKey.secretName }}
+            secretName: {{ .Values.webssh.masterKey.secretName }}
             defaultMode: 0444
       affinity:
         podAntiAffinity:
