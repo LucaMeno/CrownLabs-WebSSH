@@ -17,8 +17,6 @@ package instctrl
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -174,18 +172,11 @@ func (r *InstanceReconciler) GetPublicKeys(ctx context.Context) ([]string, error
 		}
 	}
 
-	// add the web public key
-	webPublicKeyPath := r.WebSSHMasterKeyPath
-	if webPublicKeyPath == "" {
-		log.V(utils.LogDebugLevel).Info("web public key path not set, using default: /webbastion-key/ssh_web_bastion_master.pub")
-		webPublicKeyPath = "/webbastion-key/ssh_web_bastion_master.pub"
-	}
-
-	pubKeyBytes, err := os.ReadFile(filepath.Clean(webPublicKeyPath))
-	if err == nil {
-		publicKeys = append(publicKeys, string(pubKeyBytes))
+	// add the webssh componet public key
+	if r.WebSSHMastetPublicKey == nil {
+		log.V(utils.LogDebugLevel).Info("no web public webssh master key found. It will be ignored.")
 	} else {
-		log.Error(err, "failed to read web bastion public key", "path", webPublicKeyPath)
+		publicKeys = append(publicKeys, string(r.WebSSHMastetPublicKey))
 	}
 
 	return publicKeys, nil
