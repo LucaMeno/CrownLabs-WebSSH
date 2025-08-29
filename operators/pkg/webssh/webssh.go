@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -31,7 +30,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-type config struct {
+type Config struct {
 	// the user to use for SSH connections
 	SSHUser string
 	// the path to the private key file for SSH authentication
@@ -55,60 +54,6 @@ var (
 		[]string{"destination_ip", "destination_port"},
 	)
 )
-
-func loadConfig() *config {
-	vmPort := os.Getenv("WEBSSH_VM_PORT")
-	if vmPort == "" {
-		vmPort = "22"
-		log.Println("WEBSSH_VM_PORT environment variable is not set, using default value: ", vmPort)
-	}
-
-	maxConnStr := os.Getenv("WEBSSH_MAX_CONN_COUNT")
-	if maxConnStr == "" {
-		maxConnStr = "1000" // Default value if not set
-		log.Println("WEBSSH_MAX_CONN_COUNT environment variable is not set, using default value: ", maxConnStr)
-	}
-
-	maxConn, err := strconv.Atoi(maxConnStr)
-	if err != nil {
-		maxConn = 1000
-		log.Println("WEBSSH_MAX_CONN_COUNT is not a valid integer, using default value: ", maxConn)
-	}
-
-	timeoutStr := os.Getenv("WEBSSH_TIMEOUT_DURATION")
-	timeout, err := strconv.Atoi(timeoutStr)
-	if err != nil {
-		timeout = 30
-		log.Println("WEBSSH_TIMEOUT_DURATION is not a valid integer, using default value: ", timeout)
-	}
-
-	SSHUser := os.Getenv("WEBSSH_USER")
-	if SSHUser == "" {
-		SSHUser = "crownlabs"
-		log.Println("WEBSSH_USER environment variable is not set, using default value: ", SSHUser)
-	}
-
-	privateKeyPath := os.Getenv("WEBSSH_PRIVATE_KEY_PATH")
-	if privateKeyPath == "" {
-		privateKeyPath = "/web-keys/webssh-bastion-master"
-		log.Println("WEBSSH_PRIVATE_KEY_PATH environment variable is not set, using default value: ", privateKeyPath)
-	}
-
-	websocketPort := os.Getenv("WEBSSH_WEBSOCKET_PORT")
-	if websocketPort == "" {
-		websocketPort = "8085"
-		log.Println("WEBSSH_WEBSOCKET_PORT environment variable is not set, using default value: ", websocketPort)
-	}
-
-	return &config{
-		SSHUser:            SSHUser,
-		PrivateKeyPath:     privateKeyPath,
-		TimeoutDuration:    timeout * 60, // Convert minutes to seconds
-		MaxConnectionCount: maxConn,
-		WebsocketPort:      websocketPort,
-		VMSSHPort:          vmPort,
-	}
-}
 
 var (
 	upgrader = websocket.Upgrader{
@@ -138,7 +83,7 @@ func returnError(ws *websocket.Conn, errMsg string) {
 	}
 }
 
-func wsHandler(w http.ResponseWriter, r *http.Request, config *config) {
+func wsHandler(w http.ResponseWriter, r *http.Request, config *Config) {
 	// upgrade to the WebSocket
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -286,7 +231,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request, config *config) {
 	}
 }
 
-func wsHandlerWrapper(config *config) http.HandlerFunc {
+func wsHandlerWrapper(config *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		wsHandler(w, r, config)
 	}
@@ -294,10 +239,7 @@ func wsHandlerWrapper(config *config) http.HandlerFunc {
 
 // StartWebSSH initializes the WebSocket SSH bridge server.
 // It loads the configuration, sets up the HTTP server, and starts listening for WebSocket connections.
-func StartWebSSH() {
-	// Load configuration from environment variables
-	config := loadConfig()
-
+func StartWebSSH(config *Config) {
 	// automatic Cleanup
 	startConnectionCleanup(2*time.Minute, time.Duration(config.TimeoutDuration)*time.Second)
 

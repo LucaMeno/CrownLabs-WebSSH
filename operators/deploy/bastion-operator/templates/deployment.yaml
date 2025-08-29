@@ -168,24 +168,18 @@ spec:
               port: probes
             initialDelaySeconds: 3
             periodSeconds: 3
-          env:
-            - name: WEBSSH_USER
-              value: {{ .Values.webssh.config.user | quote }}
-            - name: WEBSSH_PRIVATE_KEY_PATH
-              value: {{ .Values.webssh.config.privateKeyPath | quote }}
-            - name: WEBSSH_TIMEOUT_DURATION
-              value: {{ .Values.webssh.config.timeoutDuration | quote }}
-            - name: WEBSSH_MAX_CONN_COUNT
-              value: {{ .Values.webssh.config.maxConnCount | quote }}
-            - name: WEBSSH_VM_PORT
-              value: {{ .Values.webssh.config.vmPort | quote }}
-            - name: WEBSSH_WEBSOCKET_PORT
-              value: {{ .Values.webssh.config.webSocketPort | quote }}
           volumeMounts:
             - mountPath: /web-keys
               name: web-keys
           resources:
             {{- toYaml .Values.resources.webssh | nindent 12 }}
+          args:
+            - "--websshuser={{ .Values.webssh.config.user | quote}}"
+            - "--websshprivatekeypath=/web-keys/{{ .Values.webssh.masterKey.name | quote }}"
+            - "--websshtimeoutduration={{ .Values.webssh.config.timeoutDuration | quote }}"
+            - "--websshmaxconncount={{ .Values.webssh.config.maxConnCount | quote }}"
+            - "--websshvmport={{ .Values.webssh.config.vmPort | quote }}"
+            - "--websshwebsocketport={{ .Values.webssh.config.webSocketPort | quote }}"
       volumes:
         - name: web-keys
           secret:

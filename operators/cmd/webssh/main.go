@@ -16,6 +16,10 @@
 package main
 
 import (
+	"flag"
+	"log"
+	"strconv"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -37,6 +41,33 @@ func init() {
 }
 
 func main() {
+
+	sshUserFlag := flag.String("websshuser", "crownlabs", "The user to use for SSH connections.")
+	websshprivatekeypathFlag := flag.String("websshprivatekeypath", "", "The path to the private key file for SSH authentication.")
+	websshtimeoutdurationFlag := flag.String("websshtimeoutduration", "30", "The timeout duration for SSH connections.")
+	websshmaxconncountFlag := flag.String("websshmaxconncount", "1000", "The maximum number of concurrent SSH connections.")
+	websshvmport := flag.String("websshvmport", "22", "The default SSH port for VMs.")
+	websshwebsocketportFlag := flag.String("websshwebsocketport", "8085", "The port on which the WebSocket server listens.")
+
+	timeout, err := strconv.Atoi(*websshtimeoutdurationFlag)
+	if err != nil {
+		timeout = 30
+		log.Println("WEBSSH_TIMEOUT_DURATION is not a valid integer, using default value: ", timeout)
+	}
+
+	maxConn, err := strconv.Atoi(*websshmaxconncountFlag)
+	if err != nil {
+		maxConn = 1000
+		log.Println("WEBSSH_MAX_CONN_COUNT is not a valid integer, using default value: ", maxConn)
+	}
+
 	klog.Info("Starting WebSocket SSH bridge")
-	webssh.StartWebSSH()
+	webssh.StartWebSSH(&webssh.Config{
+		SSHUser:            *sshUserFlag,
+		PrivateKeyPath:     *websshprivatekeypathFlag,
+		TimeoutDuration:    timeout,
+		MaxConnectionCount: maxConn,
+		WebsocketPort:      *websshwebsocketportFlag,
+		VMSSHPort:          *websshvmport,
+	})
 }

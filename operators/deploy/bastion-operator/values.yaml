@@ -143,7 +143,6 @@ webssh:
     comment: webssh-bastion-master-key
   config:
     user: crownlabs
-    privateKeyPath: /web-keys/webssh-bastion-master
     timeoutDuration: 30 # minutes
     maxConCount: 1000
     vmPort: 22
