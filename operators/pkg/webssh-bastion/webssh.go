@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -45,7 +44,6 @@ type ServerContext struct {
 	WebsocketPort      string       // WebsocketPort is the port on which the WebSocket server listens
 	VMSSHPort          string       // VMSSHPort is the default SSH port for VMs
 	BaseConfig         *rest.Config // config base with all the standard Kubernetes API settings
-	mtxConfig          sync.Mutex   // mutex to protect access to config (while changing token)
 	activeConnCount    int32        // active connection count
 	BaseLogger         logr.Logger  // logger for the base context
 }

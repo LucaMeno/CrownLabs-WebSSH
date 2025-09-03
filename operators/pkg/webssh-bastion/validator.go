@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v4"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
@@ -33,8 +34,8 @@ import (
 
 type clientInitMessage struct {
 	Token     string `json:"token"`
-	VMName    string `json:"vmName"`              // The name of the VM to connect to
-	Namespace string `json:"namespace,omitempty"` // Optional namespace, can be derived from the token
+	VMName    string `json:"vmName"`    // The name of the VM to connect to
+	Namespace string `json:"namespace"` // Namespace of the tenant
 }
 
 // GetInstance retrieves an Instance CR by namespace and name.
@@ -43,11 +44,15 @@ func (webCtx *ServerContext) GetInstance(ctx context.Context, token, namespace, 
 		return nil, errors.New("baseConfig is not initialized")
 	}
 
-	webCtx.mtxConfig.Lock()
-	defer webCtx.mtxConfig.Unlock()
+	// Create a copy of the base config and set the BearerToken
+	cfg := &rest.Config{
+		Host:            webCtx.BaseConfig.Host,
+		BearerToken:     token,
+		TLSClientConfig: webCtx.BaseConfig.TLSClientConfig,
+	}
 
-	webCtx.BaseConfig.BearerToken = token
-	k8sClient, err := utils.NewK8sClientWithConfig(webCtx.BaseConfig)
+	// Create a new Kubernetes client with the provided token
+	k8sClient, err := utils.NewK8sClientWithConfig(cfg)
 	if err != nil {
 		return nil, errors.New("failed to create Kubernetes client: " + err.Error())
 	}
@@ -62,7 +67,6 @@ func (webCtx *ServerContext) GetInstance(ctx context.Context, token, namespace, 
 		return nil, errors.New("failed to get instance: " + err.Error())
 	}
 
-	webCtx.BaseConfig.BearerToken = "" // Clear the token after use
 	return instance, nil
 }
 
@@ -96,6 +100,9 @@ func (webCtx *ServerContext) validateRequest(firstMsg []byte, localCtx *LocalCon
 		return errors.New("invalid token format: " + err.Error())
 	}
 
+	localCtx.namespace = initMsg.Namespace
+	localCtx.username = username
+
 	// get the instance by name and namespace
 	instance, err := webCtx.GetInstance(localCtx.mainCtx, initMsg.Token, initMsg.Namespace, initMsg.VMName)
 	if err != nil {
@@ -112,8 +119,6 @@ func (webCtx *ServerContext) validateRequest(firstMsg []byte, localCtx *LocalCon
 		return errors.New("instance has no IP address assigned")
 	}
 
-	localCtx.namespace = initMsg.Namespace
-	localCtx.username = username
 	localCtx.ip = instance.Status.IP
 
 	return nil

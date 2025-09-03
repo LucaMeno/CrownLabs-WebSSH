@@ -50,6 +50,8 @@ func main() {
 	websshvmport := flag.String("websshvmport", "22", "The default SSH port for VMs.")
 	websshwebsocketportFlag := flag.String("websshwebsocketport", "8085", "The port on which the WebSocket server listens.")
 
+	flag.Parse()
+
 	timeout64, err := strconv.ParseInt(*websshtimeoutdurationFlag, 10, 32) // parse directly as int32
 	if err != nil {
 		timeout64 = 30
@@ -77,6 +79,25 @@ func main() {
 		webSSHCtx.BaseLogger.Error(err, "Failed to get REST config")
 		return
 	}
+
+	info, err := os.Stat(webSSHCtx.PrivateKeyPath)
+	if err != nil {
+		webSSHCtx.BaseLogger.Error(err, "Cannot access private key file")
+		return
+	}
+
+	if info.IsDir() {
+		webSSHCtx.BaseLogger.Error(nil, "Private key path points to a directory, not a file")
+		return
+	}
+
+	webSSHCtx.BaseLogger.Info("Config loaded",
+		"SSHUser", webSSHCtx.SSHUser,
+		"PrivateKeyPath", webSSHCtx.PrivateKeyPath,
+		"TimeoutDuration", webSSHCtx.TimeoutDuration,
+		"MaxConnectionCount", webSSHCtx.MaxConnectionCount,
+		"WebsocketPort", webSSHCtx.WebsocketPort,
+		"VMSSHPort", webSSHCtx.VMSSHPort)
 
 	webSSHCtx.StartWebSSH()
 }

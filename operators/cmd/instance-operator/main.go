@@ -135,6 +135,9 @@ func main() {
 		if err != nil {
 			log.Error(err, "failed to read webssh public key", "path", *websshKeyPathFlag)
 		}
+		log.Info("webssh public key correctly retrieved")
+	} else {
+		log.Error(err, "no path provided for webssh public key")
 	}
 
 	if err = (&instctrl.InstanceReconciler{
@@ -144,7 +147,7 @@ func main() {
 		NamespaceWhitelist:    nsWhitelist,
 		ServiceUrls:           svcUrls,
 		ContainerEnvOpts:      containerEnvOpts,
-		WebSSHMastetPublicKey: pubKeyBytes,
+		WebSSHMasterPublicKey: pubKeyBytes,
 	}).SetupWithManager(mgr, *maxConcurrentReconciles); err != nil {
 		log.Error(err, "unable to create controller", "controller", instanceCtrlName)
 		os.Exit(1)
