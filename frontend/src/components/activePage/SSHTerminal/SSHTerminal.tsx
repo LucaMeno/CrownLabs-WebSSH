@@ -22,7 +22,7 @@ const SSHTerminal: React.FC = () => {
 
     instance.focus();
 
-    const ws = new WebSocket(`wss://${window.location.host}/ws`);
+    const ws = new WebSocket(`wss://950.staging.crownlabs.polito.it/webssh`);
 
     ws.onopen = () => {
       ws.send(
