@@ -21,8 +21,11 @@ const SSHTerminal: React.FC = () => {
     };
 
     instance.focus();
-
-    const ws = new WebSocket(`wss://950.staging.crownlabs.polito.it/webssh`);
+    const IP = 'localhost'
+    const PORT = 8090;
+    const socketUrl = `ws://${IP}:${PORT}/webssh`;
+    const ws = new WebSocket(socketUrl);
+    //const ws = new WebSocket(`wss://950.staging.crownlabs.polito.it/webssh`);
 
     ws.onopen = () => {
       ws.send(
@@ -30,16 +33,34 @@ const SSHTerminal: React.FC = () => {
           namespace,
           vmName: nomeVM,
           token,
+          InitialWidth: instance.cols,
+          InitialHeight: instance.rows
         })
       );
 
-      
       instance.writeln(`\x1b[1;36m📡 Connecting to VM \x1b[0m`);
       instance.writeln('[✔] SSH connection success.\r\n');
+
+      setInterval(() => {
+        const obj = { type: "ping" };
+        console.log(obj);
+        ws.send(JSON.stringify(obj));
+      }, 10000);
     };
 
     ws.onmessage = (ev) => {
-      instance.write(ev.data);
+      var obj = JSON.parse(ev.data);
+
+      console.log("Received message:", obj);
+
+      if (obj.error) {
+        instance.write(`\r\n\x1b[1;31m${obj.error}\x1b[0m\r\n`);
+        ws.close();
+        return;
+      }
+      if (obj.data) {
+        instance.write(obj.data);
+      }
     };
 
     ws.onerror = () => {
@@ -51,9 +72,23 @@ const SSHTerminal: React.FC = () => {
     };
 
     instance.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(data);
-      }
+      const msg = {
+        type: "input",
+        data: data,
+      };
+
+      console.log("Terminal data:", msg);
+      ws.send(JSON.stringify(msg));
+    });
+
+    instance.onResize(({ cols, rows }) => {
+      const msg = {
+        type: "resize",
+        cols: cols,
+        rows: rows,
+      };
+      console.log("Terminal resized:", msg);
+      ws.send(JSON.stringify(msg));
     });
 
     return () => {
