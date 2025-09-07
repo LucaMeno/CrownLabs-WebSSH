@@ -38,7 +38,14 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
 
   const currentName = routesData.find(r => r.path === currentPath)?.name || '';
 
-  const isSSHRoute = /^\/instance\/[^/]+\/[^/]+\/ssh$/.test(currentPath);
+  //const isSSHRoute = /^\/instance\/[^/]+\/[^/]+\/ssh$/.test(currentPath);
+  // matcha sia "http://localhost:3000/instance/tenant/instance/ssh"
+// sia solo "/instance/tenant/instance/ssh", con / finale, query o hash opzionali
+const isSSHRoute =
+  /^(?:https?:\/\/[^/]+)?\/instance\/[^/]+\/[^/]+\/ssh\/?(?:\?.*)?(?:#.*)?$/
+  .test(currentPath);
+
+  console.log(isSSHRoute);
 
   const buttons = routes.map((b, i) => {
     const routeData = b.route;

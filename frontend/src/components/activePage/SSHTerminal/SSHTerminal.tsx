@@ -1,13 +1,18 @@
-import React, { useEffect, useContext } from 'react';
+import React, { useEffect, useContext, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useXTerm } from 'react-xtermjs';
 import { AuthContext } from '../../../contexts/AuthContext';
 import './SSHTerminal.css';
+import { FitAddon } from 'xterm-addon-fit';
 
 const SSHTerminal: React.FC = () => {
   const { namespace = '', VMname: nomeVM = '' } = useParams();
   const { ref, instance } = useXTerm();
   const { token } = useContext(AuthContext);
+
+  const fitRef = useRef<FitAddon | null>(null);
+  const resizeObs = useRef<ResizeObserver | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);            
 
   useEffect(() => {
     if (!instance) return;
@@ -15,87 +20,93 @@ const SSHTerminal: React.FC = () => {
     instance.options = {
       cursorBlink: true,
       scrollback: 10000,
-      theme: {
-        background: '#000000',
-      },
+      convertEol: true,
+      theme: { background: '#000000' },
     };
 
+    if (!fitRef.current) {
+      fitRef.current = new FitAddon();
+      instance.loadAddon(fitRef.current);
+    }
+
+    
+    const fitAndNotify = () =>
+      requestAnimationFrame(() => {
+        fitRef.current?.fit();
+        const { cols, rows } = instance;
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
+        }
+      });
+
     instance.focus();
-    const IP = 'localhost'
+    fitAndNotify();                          
+    window.addEventListener('resize', fitAndNotify);
+    (document as any).fonts?.ready?.then?.(fitAndNotify);
+
+    if (ref.current && 'ResizeObserver' in window) {
+      resizeObs.current = new ResizeObserver(fitAndNotify);
+      resizeObs.current.observe(ref.current);
+    }
+
+    // --- WebSocket ---
+    const IP = 'localhost';
     const PORT = 8090;
     const socketUrl = `ws://${IP}:${PORT}/webssh`;
     const ws = new WebSocket(socketUrl);
-    //const ws = new WebSocket(`wss://950.staging.crownlabs.polito.it/webssh`);
+    wsRef.current = ws;                      
 
     ws.onopen = () => {
-      ws.send(
-        JSON.stringify({
-          namespace,
-          vmName: nomeVM,
-          token,
-          InitialWidth: instance.cols,
-          InitialHeight: instance.rows
-        })
-      );
+      ws.send(JSON.stringify({
+        namespace,
+        vmName: nomeVM,
+        token,
+        InitialWidth: instance.cols,
+        InitialHeight: instance.rows,
+      }));
 
-      instance.writeln(`\x1b[1;36m📡 Connecting to VM \x1b[0m`);
-      instance.writeln('[✔] SSH connection success.\r\n');
+      instance.writeln('');
+      instance.writeln('\x1b[1;36m📡 Connecting to VM... \x1b[0m');
+      instance.writeln('\x1b[1;32m[✔] SSH connection success.\x1b[0m\r\n');
 
-      setInterval(() => {
-        const obj = { type: "ping" };
-        console.log(obj);
-        ws.send(JSON.stringify(obj));
-      }, 10000);
+      fitAndNotify();                        
+
+      setInterval(() => ws.send(JSON.stringify({ type: 'ping' })), 10000);
     };
 
     ws.onmessage = (ev) => {
-      var obj = JSON.parse(ev.data);
-
-      console.log("Received message:", obj);
-
+      const obj = JSON.parse(ev.data);
       if (obj.error) {
         instance.write(`\r\n\x1b[1;31m${obj.error}\x1b[0m\r\n`);
         ws.close();
         return;
       }
-      if (obj.data) {
-        instance.write(obj.data);
-      }
+      if (obj.data) instance.write(obj.data);
     };
 
     ws.onerror = () => {
-      instance.writeln('[✖] Connection error.\r\n');
+      //instance.writeln('\x1b[1;31m[✖] Connection error.\x1b[0m\r\n');
     };
-
     ws.onclose = () => {
-      instance.writeln('[●] Connection closed.\r\n');
+      //instance.writeln('\x1b[1;33m[●] Connection closed.\x1b[0m\r\n');
     };
 
-    instance.onData((data) => {
-      const msg = {
-        type: "input",
-        data: data,
-      };
-
-      console.log("Terminal data:", msg);
-      ws.send(JSON.stringify(msg));
+    
+    const disposeData = instance.onData((data) => {
+      ws.readyState === WebSocket.OPEN &&
+        ws.send(JSON.stringify({ type: 'input', data }));
     });
 
-    instance.onResize(({ cols, rows }) => {
-      const msg = {
-        type: "resize",
-        cols: cols,
-        rows: rows,
-      };
-      console.log("Terminal resized:", msg);
-      ws.send(JSON.stringify(msg));
-    });
 
     return () => {
-      ws.close();
-      instance.dispose();
+      disposeData.dispose();
+      resizeObs.current?.disconnect();
+      window.removeEventListener('resize', fitAndNotify);
+      try { ws.close(); } catch {}
+      wsRef.current = null;
+      try { instance.dispose(); } catch {}
     };
-  }, [instance, namespace, nomeVM, token]);
+  }, [instance, namespace, nomeVM, token, ref]);
 
   return <div ref={ref} className="ssh-terminal" />;
 };
