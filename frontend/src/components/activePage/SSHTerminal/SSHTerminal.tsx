@@ -85,10 +85,10 @@ const SSHTerminal: React.FC = () => {
     };
 
     ws.onerror = () => {
-      //instance.writeln('\x1b[1;31m[✖] Connection error.\x1b[0m\r\n');
+      instance.writeln('\x1b[1;31m[✖] Connection error.\x1b[0m\r\n');
     };
     ws.onclose = () => {
-      //instance.writeln('\x1b[1;33m[●] Connection closed.\x1b[0m\r\n');
+      instance.writeln('\x1b[1;33m[●] Connection closed.\x1b[0m\r\n');
     };
 
     
