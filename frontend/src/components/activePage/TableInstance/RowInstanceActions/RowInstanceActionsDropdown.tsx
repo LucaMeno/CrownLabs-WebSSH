@@ -144,7 +144,7 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
             label: (
               <>
                 SSH
-                <Button type="link" className='ml-3' target='_blank' href={`/instance/${instance.tenantNamespace}/${instance.name}/ssh`} icon={<ExportOutlined />} variant='solid' color='primary' shape='circle' size='small' onClick={(e) => e.stopPropagation()}>
+                <Button type="link" className='ml-3' target='_blank' href={`/instance/${instance.tenantNamespace}/${instance.name}/:env/ssh`} icon={<ExportOutlined />} variant='solid' color='primary' shape='circle' size='small' onClick={(e) => e.stopPropagation()}>
                 </Button>
               </>
             ),
