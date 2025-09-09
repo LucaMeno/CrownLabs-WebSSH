@@ -16,6 +16,8 @@ export interface ISSHModalContentProps {
 const SSHModalContent: FC<ISSHModalContentProps> = ({ ...props }) => {
   const { instanceIp, hasSSHKeys } = props;
 
+  const ENV_PLACEHOLDER = "env";
+
   return (
     <Space direction="vertical" className="flex justify-center text-center max-w-xl mx-auto">
       <Text className="text-base">
@@ -28,7 +30,7 @@ const SSHModalContent: FC<ISSHModalContentProps> = ({ ...props }) => {
         shape="round"
         onClick={() => {
           window.open(
-            `/instance/${props.namespace}/${props.name}/:env/ssh`,
+            `/instance/${props.namespace}/${props.name}/${ENV_PLACEHOLDER}/ssh`,
             '_blank',
             'noopener,noreferrer'
           );

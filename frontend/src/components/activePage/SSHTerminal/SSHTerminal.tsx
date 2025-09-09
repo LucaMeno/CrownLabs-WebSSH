@@ -6,13 +6,13 @@ import './SSHTerminal.css';
 import { FitAddon } from 'xterm-addon-fit';
 
 const SSHTerminal: React.FC = () => {
-  const { namespace = '', VMname: nomeVM = '' } = useParams();
+  const { namespace = '', VMname: nomeVM = '', environment = '' } = useParams();
   const { ref, instance } = useXTerm();
   const { token } = useContext(AuthContext);
 
   const fitRef = useRef<FitAddon | null>(null);
   const resizeObs = useRef<ResizeObserver | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);            
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     if (!instance) return;
@@ -29,7 +29,7 @@ const SSHTerminal: React.FC = () => {
       instance.loadAddon(fitRef.current);
     }
 
-    
+
     const fitAndNotify = () =>
       requestAnimationFrame(() => {
         fitRef.current?.fit();
@@ -40,7 +40,7 @@ const SSHTerminal: React.FC = () => {
       });
 
     instance.focus();
-    fitAndNotify();                          
+    fitAndNotify();
     window.addEventListener('resize', fitAndNotify);
     (document as any).fonts?.ready?.then?.(fitAndNotify);
 
@@ -54,22 +54,27 @@ const SSHTerminal: React.FC = () => {
     const PORT = 8090;
     const socketUrl = `ws://${IP}:${PORT}/webssh`;
     const ws = new WebSocket(socketUrl);
-    wsRef.current = ws;                      
+    wsRef.current = ws;
 
     ws.onopen = () => {
+
+      console.log("ENV:", environment);
+
+      // init message
       ws.send(JSON.stringify({
         namespace,
         vmName: nomeVM,
         token,
         InitialWidth: instance.cols,
         InitialHeight: instance.rows,
+        Environment: environment
       }));
 
       instance.writeln('');
       instance.writeln('\x1b[1;36m📡 Connecting to VM... \x1b[0m');
       instance.writeln('\x1b[1;32m[✔] SSH connection success.\x1b[0m\r\n');
 
-      fitAndNotify();                        
+      fitAndNotify();
 
       setInterval(() => ws.send(JSON.stringify({ type: 'ping' })), 10000);
     };
@@ -91,7 +96,7 @@ const SSHTerminal: React.FC = () => {
       instance.writeln('\x1b[1;33m[●] Connection closed.\x1b[0m\r\n');
     };
 
-    
+
     const disposeData = instance.onData((data) => {
       ws.readyState === WebSocket.OPEN &&
         ws.send(JSON.stringify({ type: 'input', data }));
@@ -102,9 +107,9 @@ const SSHTerminal: React.FC = () => {
       disposeData.dispose();
       resizeObs.current?.disconnect();
       window.removeEventListener('resize', fitAndNotify);
-      try { ws.close(); } catch {}
+      try { ws.close(); } catch { }
       wsRef.current = null;
-      try { instance.dispose(); } catch {}
+      try { instance.dispose(); } catch { }
     };
   }, [instance, namespace, nomeVM, token, ref]);
 

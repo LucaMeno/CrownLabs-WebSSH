@@ -103,6 +103,8 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
 
   const connectDisabled = status !== Phase.Ready || (isContainer && !gui);
 
+  const ENV_PLACEHOLDER = "env";
+
   return (
     <Dropdown
       trigger={['click']}
@@ -144,7 +146,16 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
             label: (
               <>
                 SSH
-                <Button type="link" className='ml-3' target='_blank' href={`/instance/${instance.tenantNamespace}/${instance.name}/:env/ssh`} icon={<ExportOutlined />} variant='solid' color='primary' shape='circle' size='small' onClick={(e) => e.stopPropagation()}>
+                <Button type="link"
+                  className='ml-3'
+                  target='_blank'
+                  href={`/instance/${instance.tenantNamespace}/${instance.name}/${ENV_PLACEHOLDER}/ssh`}
+                  icon={<ExportOutlined />}
+                  variant='solid'
+                  color='primary'
+                  shape='circle'
+                  size='small'
+                  onClick={(e) => e.stopPropagation()}>
                 </Button>
               </>
             ),
