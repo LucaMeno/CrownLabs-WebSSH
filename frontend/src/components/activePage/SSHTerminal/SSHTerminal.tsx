@@ -1,4 +1,4 @@
-import React, { useEffect, useContext, useRef } from 'react';
+import React, { useEffect, useContext, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useXTerm } from 'react-xtermjs';
 import { AuthContext } from '../../../contexts/AuthContext';
@@ -14,9 +14,13 @@ type TerminalSize = {
 };
 
 const SSHTerminal: React.FC = () => {
-
   const { makeErrorCatcher } = useContext(ErrorContext);
-  const genericErrorCatcher = makeErrorCatcher(ErrorTypes.GenericError);
+  const genericErrorCatcher = useCallback(
+    (error: SupportedError) => {
+      makeErrorCatcher(ErrorTypes.GenericError)(error);
+    },
+    [makeErrorCatcher],
+  );
 
   const { namespace = '', VMname: VmName = '', environment = '' } = useParams();
   const { ref, instance } = useXTerm();
@@ -25,6 +29,8 @@ const SSHTerminal: React.FC = () => {
   const fitRef = useRef<FitAddon | null>(null);
   const resizeObs = useRef<ResizeObserver | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+
+  const keepAliveRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!instance) return;
@@ -47,18 +53,22 @@ const SSHTerminal: React.FC = () => {
       requestAnimationFrame(() => {
         fitRef.current?.fit();
         const { cols, rows } = instance;
-        if ((cols !== lastSize.cols || rows !== lastSize.rows) &&
-          (wsRef.current?.readyState === WebSocket.OPEN)) {
+        if (
+          (cols !== lastSize.cols || rows !== lastSize.rows) &&
+          wsRef.current?.readyState === WebSocket.OPEN
+        ) {
           lastSize = { cols, rows };
           wsRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
         }
       });
-    }
+    };
 
     instance.focus();
     fitAndNotify();
     window.addEventListener('resize', fitAndNotify);
-    (document as any).fonts?.ready?.then(() => fitAndNotify());
+    (document as Document & { fonts?: FontFaceSet }).fonts?.ready?.then(() =>
+      fitAndNotify(),
+    );
 
     if (ref.current && 'ResizeObserver' in window) {
       resizeObs.current = new ResizeObserver(fitAndNotify);
@@ -77,14 +87,16 @@ const SSHTerminal: React.FC = () => {
 
     ws.onopen = () => {
       // init message
-      ws.send(JSON.stringify({
-        namespace,
-        vmName: VmName,
-        token,
-        InitialWidth: instance.cols,
-        InitialHeight: instance.rows,
-        Environment: environment
-      }));
+      ws.send(
+        JSON.stringify({
+          namespace,
+          vmName: VmName,
+          token,
+          InitialWidth: instance.cols,
+          InitialHeight: instance.rows,
+          Environment: environment,
+        }),
+      );
 
       instance.writeln('');
       instance.writeln('\x1b[1;36m📡 Connecting to VM... \x1b[0m');
@@ -93,14 +105,14 @@ const SSHTerminal: React.FC = () => {
       fitAndNotify();
 
       // keepalive
-      setInterval(() => {
+      keepAliveRef.current = window.setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'ping' }));
         }
-      }, 30000 /* 30 sec */);
+      }, 30000 /* 30s */);
     };
 
-    ws.onmessage = (ev) => {
+    ws.onmessage = ev => {
       const obj = JSON.parse(ev.data);
 
       if (!obj.type) return;
@@ -130,9 +142,10 @@ const SSHTerminal: React.FC = () => {
       instance.writeln('\x1b[1;33m[●] Connection closed.\x1b[0m\r\n');
     };
 
-    const disposeData = instance.onData((data) => {
-      ws.readyState === WebSocket.OPEN &&
+    const disposeData = instance.onData(data => {
+      if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'input', data }));
+      }
     });
 
     return () => {
@@ -151,7 +164,15 @@ const SSHTerminal: React.FC = () => {
         genericErrorCatcher(error as SupportedError);
       }
     };
-  }, [instance, namespace, VmName, token, ref, environment]);
+  }, [
+    instance,
+    namespace,
+    VmName,
+    token,
+    ref,
+    environment,
+    genericErrorCatcher,
+  ]);
 
   return <div ref={ref} className="ssh-terminal" />;
 };

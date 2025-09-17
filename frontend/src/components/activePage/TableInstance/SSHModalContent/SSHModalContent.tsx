@@ -16,25 +16,25 @@ export interface ISSHModalContentProps {
 const SSHModalContent: FC<ISSHModalContentProps> = ({ ...props }) => {
   const { instanceIp, hasSSHKeys } = props;
 
-  const ENV_PLACEHOLDER = "env";
+  const ENV_PLACEHOLDER = 'env';
 
   return (
-    <Space direction="vertical" className="flex justify-center text-center max-w-xl mx-auto">
+    <Space
+      direction="vertical"
+      className="flex justify-center text-center max-w-xl mx-auto"
+    >
       <Text className="text-base">
-        Use your browser to open the terminal now, or configure a personal SSH key to access it from your terminal.
+        Use your browser to open the terminal now, or configure a personal SSH
+        key to access it from your terminal.
       </Text>
 
-      <Link 
+      <Link
         to={`/instance/${props.namespace}/${props.name}/${ENV_PLACEHOLDER}/ssh`}
         target="_blank"
         rel="noopener noreferrer"
         onClick={props.onClose}
       >
-        <Button
-          className="mt-4"
-          type="primary"
-          shape="round"
-        >
+        <Button className="mt-4" type="primary" shape="round">
           Connect via browser
         </Button>
       </Link>
@@ -42,7 +42,8 @@ const SSHModalContent: FC<ISSHModalContentProps> = ({ ...props }) => {
       {hasSSHKeys ? (
         <>
           <Text className="mt-5 text-base">
-            You have already registered an SSH key. You can connect via terminal using:
+            You have already registered an SSH key. You can connect via terminal
+            using:
           </Text>
           <Text type="warning" code copyable>
             ssh -J bastion@ssh.crownlabs.polito.it crownlabs@{instanceIp}
