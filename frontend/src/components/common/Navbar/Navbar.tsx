@@ -104,16 +104,16 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
 
   useEffect(() => {
     const checkHeight = () => {
-      // Nascondi navbar solo su route SSH quando viewport < 300px
-      setIsHeightTooSmall(isSSHRoute && window.innerHeight < 300);
+      // Nascondi navbar solo su route SSH quando viewport < 30% dello schermo
+      setIsHeightTooSmall(isSSHRoute && window.innerHeight < window.innerWidth * 0.3);
 
       if (isSSHRoute) {
-        if (window.innerHeight < 300) {
+        if (window.innerHeight < window.innerWidth * 0.3) {
           // Navbar nascosta
           document.documentElement.style.setProperty('--navbar-h', '0px');
         } else {
           // Misura l'altezza reale della navbar
-          const realHeight = headerRef.current?.offsetHeight || 64;
+          const realHeight = headerRef.current?.offsetHeight;
           document.documentElement.style.setProperty(
             '--navbar-h',
             realHeight + 'px',
