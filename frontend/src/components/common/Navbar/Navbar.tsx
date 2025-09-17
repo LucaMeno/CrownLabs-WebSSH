@@ -37,7 +37,9 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
   const currentPath = useLocation().pathname;
 
   // Matcha entrambi i pattern SSH: /instance/tenant/instance/ssh e /instance/tenant/instance/env/ssh
-  const isSSHRoute = /^\/instance\/[^/]+\/[^/]+(?:\/[^/]+)?\/ssh$/.test(currentPath);
+  const isSSHRoute = /^\/instance\/[^/]+\/[^/]+(?:\/[^/]+)?\/ssh$/.test(
+    currentPath,
+  );
 
   const currentName = routesData.find(r => r.path === currentPath)?.name || '';
   const displayName = currentName || (isSSHRoute ? 'Web SSH' : '');
@@ -69,7 +71,6 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
                 ? false
                 : currentPath !== routeData.path
             }
-
             className={
               'w-full flex justify-center my-3 ' +
               (routes.length <= 4
@@ -100,7 +101,7 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
 
   const [isHeightTooSmall, setIsHeightTooSmall] = useState(false);
   const headerRef = useRef<HTMLDivElement | null>(null);
-  
+
   useEffect(() => {
     const checkHeight = () => {
       // Nascondi navbar solo su route SSH quando viewport < 300px
@@ -113,7 +114,10 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
         } else {
           // Misura l'altezza reale della navbar
           const realHeight = headerRef.current?.offsetHeight || 64;
-          document.documentElement.style.setProperty('--navbar-h', realHeight + 'px');
+          document.documentElement.style.setProperty(
+            '--navbar-h',
+            realHeight + 'px',
+          );
         }
 
         // Forza refit terminale
@@ -158,8 +162,11 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
             }
           >
             {buttons
-              .filter(b => b.linkPosition === LinkPosition.NavbarButton ||
-                (b.linkPosition === LinkPosition.Hidden && isSSHRoute))
+              .filter(
+                b =>
+                  b.linkPosition === LinkPosition.NavbarButton ||
+                  (b.linkPosition === LinkPosition.Hidden && isSSHRoute),
+              )
               .map(b => b.content)}
           </div>
           <div
@@ -169,8 +176,11 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
             }
           >
             {buttons
-              .filter(b => b.linkPosition === LinkPosition.NavbarButton ||
-                (b.linkPosition === LinkPosition.Hidden && isSSHRoute))
+              .filter(
+                b =>
+                  b.linkPosition === LinkPosition.NavbarButton ||
+                  (b.linkPosition === LinkPosition.Hidden && isSSHRoute),
+              )
               .slice(0, 2)
               .map((b, i) => (
                 <div key={i} className="w-28  mr-3">
@@ -266,7 +276,7 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
             .filter(
               b =>
                 b.linkPosition !== LinkPosition.Hidden ||
-                (b.linkPosition === LinkPosition.Hidden && isSSHRoute)
+                (b.linkPosition === LinkPosition.Hidden && isSSHRoute),
             )
             .map(b => b.content)}
         </div>
