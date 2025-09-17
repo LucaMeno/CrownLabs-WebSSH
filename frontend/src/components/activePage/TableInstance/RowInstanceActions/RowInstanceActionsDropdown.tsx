@@ -149,22 +149,25 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
             label: (
               <>
                 SSH
-                <Link
-                  to={`/instance/${instance.tenantNamespace}/${instance.name}/${ENV_PLACEHOLDER}/ssh`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <Button
-                    type="link"
-                    className="ml-3"
-                    icon={<ExportOutlined />}
-                    variant="solid"
-                    color="primary"
-                    shape="circle"
-                    size="small"
-                  ></Button>
-                </Link>
+                <Button
+                  type="link"
+                  className="ml-3"
+                  variant="solid"
+                  color="primary"
+                  shape="circle"
+                  size="small"
+                  icon={
+                    <Link
+                      to={`/instance/${instance.tenantNamespace}/${instance.name}/${ENV_PLACEHOLDER}/ssh`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      style={{ color: 'inherit', display: 'flex', alignItems: 'center' }}
+                    >
+                      <ExportOutlined />
+                    </Link>
+                  }
+                ></Button>
               </>
             ),
             onClick: () => setSshModal(true),
