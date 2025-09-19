@@ -24,8 +24,8 @@ const SSHModalContent: FC<ISSHModalContentProps> = ({ ...props }) => {
       className="flex justify-center text-center max-w-xl mx-auto"
     >
       <Text className="text-base">
-        Use your browser to open the terminal now, or configure a personal SSH
-        key to access it from your terminal.
+        You can open the terminal in your browser, or set up a personal SSH key
+        to use your own terminal.
       </Text>
 
       <Link
@@ -38,6 +38,8 @@ const SSHModalContent: FC<ISSHModalContentProps> = ({ ...props }) => {
           Connect via browser
         </Button>
       </Link>
+      
+      <div className="border-t border-gray-400 w-full mt-4" />
 
       {hasSSHKeys ? (
         <>
