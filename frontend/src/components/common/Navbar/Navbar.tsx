@@ -36,7 +36,6 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
 
   const currentPath = useLocation().pathname;
 
-  // Matcha entrambi i pattern SSH: /instance/tenant/instance/ssh e /instance/tenant/instance/env/ssh
   const isSSHRoute = /^\/instance\/[^/]+\/[^/]+(?:\/[^/]+)?\/ssh$/.test(
     currentPath,
   );
@@ -104,23 +103,21 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
 
   useEffect(() => {
     const checkHeight = () => {
-      // Nascondi navbar solo su route SSH quando viewport < 30% dello schermo
-      setIsHeightTooSmall(isSSHRoute && window.innerHeight < window.innerWidth * 0.3);
-
       if (isSSHRoute) {
-        if (window.innerHeight < window.innerWidth * 0.3) {
-          // Navbar nascosta
+        const isTooShort = window.innerHeight < window.screen.height * 0.3;
+        setIsHeightTooSmall(isTooShort);
+
+        if (isTooShort) {
           document.documentElement.style.setProperty('--navbar-h', '0px');
         } else {
-          // Misura l'altezza reale della navbar
-          const realHeight = headerRef.current?.offsetHeight;
+          const realHeight = headerRef.current?.offsetHeight || 0;
           document.documentElement.style.setProperty(
             '--navbar-h',
             realHeight + 'px',
           );
         }
 
-        // Forza refit terminale
+        // Trigger resize for components that might need (sshterminal)
         requestAnimationFrame(() => {
           window.dispatchEvent(new Event('resize'));
         });
