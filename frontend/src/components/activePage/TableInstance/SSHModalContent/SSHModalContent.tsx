@@ -38,7 +38,7 @@ const SSHModalContent: FC<ISSHModalContentProps> = ({ ...props }) => {
           Connect via browser
         </Button>
       </Link>
-      
+
       <div className="border-t border-gray-400 w-full mt-4" />
 
       {hasSSHKeys ? (
