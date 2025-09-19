@@ -153,7 +153,6 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
                   type="link"
                   className="ml-3"
                   variant="solid"
-                  color="primary"
                   shape="circle"
                   size="small"
                   icon={
@@ -168,7 +167,9 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
                         alignItems: 'center',
                       }}
                     >
-                      <ExportOutlined />
+                      <span style={{ filter: 'drop-shadow(0 0 0 black)' }}>
+                        <ExportOutlined style={{ fontSize: 15 }} />
+                      </span>
                     </Link>
                   }
                 ></Button>

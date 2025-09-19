@@ -71,7 +71,11 @@ const Navbar: FC<INavbarProps> = ({ ...props }) => {
                 : currentPath !== routeData.path
             }
             className={
-              'w-full flex justify-center my-3 ' +
+              'my-3 ' +
+              (isSSHRoute
+                ? 'flex-1 min-w-[100px] max-w-[160px] mx-2 '
+                : 'w-full flex justify-center ')
+              +
               (routes.length <= 4
                 ? 'lg:mx-4 md:mx-2 md:w-28 lg:w-36 xl:w-52 2xl:w-72 '
                 : 'lg:mx-2 lg:w-28 xl:w-32 2xl:w-48') +
