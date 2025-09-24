@@ -68,6 +68,7 @@ type LocalContext struct {
 	wg          sync.WaitGroup     // wait group for goroutines
 	stdin       io.WriteCloser     // stdin pipe for the SSH session
 	stdout      io.Reader          // stdout pipe for the SSH session
+	mtxWs       sync.Mutex         // mutex for WebSocket write operations
 }
 
 // clientMessage represents a message from the client to the server.
@@ -160,6 +161,7 @@ func (webCtx *ServerContext) wsHandler(w http.ResponseWriter, r *http.Request) {
 		cancelFun:   nil,
 		stdin:       nil,
 		stdout:      nil,
+		mtxWs:       sync.Mutex{},
 	}
 
 	// check the number of connection
@@ -182,17 +184,15 @@ func (webCtx *ServerContext) wsHandler(w http.ResponseWriter, r *http.Request) {
 				Error: localCtx.errorMsg,
 			}
 
-			msgJSON, err := json.Marshal(srvMsg)
-			if err != nil {
-				localCtx.logger().Error(err, "Failed to marshal server error message")
-			}
-
-			if err := ws.WriteMessage(websocket.TextMessage, msgJSON); err != nil {
-				localCtx.logger().Error(err, "WebSocket error on sending msg connection closure")
+			if err := localCtx.writeWsMessage(srvMsg); err != nil {
+				localCtx.logger().Error(err, "WebSocket write error - defer")
 			}
 		}
+
 		if err := ws.Close(); err != nil {
-			localCtx.logger().Error(err, "Failed to close WebSocket connection")
+			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				localCtx.logger().Error(err, "Failed to close WebSocket connection - defer")
+			}
 		}
 
 		localCtx.logger().Info("WebSocket connection closed")
@@ -278,11 +278,11 @@ func (webCtx *ServerContext) wsHandler(w http.ResponseWriter, r *http.Request) {
 	localCtx.session = session
 
 	defer func() {
-		if err := session.Close(); err != nil {
-			localCtx.logger().Error(err, "Failed to close SSH session")
+		if err := session.Close(); err != nil && !errors.Is(err, io.EOF) {
+			localCtx.logger().Error(err, "Failed to close SSH session - defer")
 		}
 		if err := sshConn.Close(); err != nil {
-			localCtx.logger().Error(err, "Failed to close SSH connection")
+			localCtx.logger().Error(err, "Failed to close SSH connection - defer")
 		}
 	}()
 
@@ -344,6 +344,24 @@ func (webCtx *ServerContext) wsHandler(w http.ResponseWriter, r *http.Request) {
 	localCtx.wg.Wait()
 }
 
+func (localCtx *LocalContext) closeContexts(err error, logMsg, logForUser string) {
+	localCtx.logger().Error(err, logMsg)
+	localCtx.errorMsg = logForUser
+	localCtx.cancelFun()
+}
+
+func (localCtx *LocalContext) writeWsMessage(msg serverMessage) error {
+	msgJSON, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	localCtx.mtxWs.Lock()
+	defer localCtx.mtxWs.Unlock()
+
+	return localCtx.ws.WriteMessage(websocket.TextMessage, msgJSON)
+}
+
 func (webCtx *ServerContext) timeoutHandler(localCtx *LocalContext) {
 	defer localCtx.wg.Done()
 
@@ -353,10 +371,8 @@ func (webCtx *ServerContext) timeoutHandler(localCtx *LocalContext) {
 	for {
 		select {
 		case <-localCtx.ctxServer.Done():
-			localCtx.logger().Info("server context done, closing timeoutHandler")
 			return
 		case <-localCtx.ctxReq.Done():
-			localCtx.logger().Info("request context done, closing timeoutHandler")
 			return
 		case <-ticker.C:
 			// Check for timeout
@@ -376,25 +392,13 @@ func (webCtx *ServerContext) timeoutHandler(localCtx *LocalContext) {
 					Error: "",
 				}
 
-				msgJSON, err := json.Marshal(srvMsg)
-				if err != nil {
-					localCtx.closeContexts(err, "Failed to marshal server message - timeoutHandler", "Internal server error")
-					return
-				}
-
-				if err := localCtx.ws.WriteMessage(websocket.PongMessage, msgJSON); err != nil {
+				if err := localCtx.writeWsMessage(srvMsg); err != nil {
 					localCtx.closeContexts(err, "WebSocket write error - timeoutHandler", "Internal server error")
 					return
 				}
 			}
 		}
 	}
-}
-
-func (localCtx *LocalContext) closeContexts(err error, logMsg, logForUser string) {
-	localCtx.logger().Error(err, logMsg)
-	localCtx.errorMsg = logForUser
-	localCtx.cancelFun()
 }
 
 func (webCtx *ServerContext) serverToClient(localCtx *LocalContext) {
@@ -416,10 +420,8 @@ func (webCtx *ServerContext) serverToClient(localCtx *LocalContext) {
 		case <-done:
 			// read completed
 		case <-localCtx.ctxServer.Done():
-			localCtx.logger().Info("server context done, closing serverToClient")
 			return
 		case <-localCtx.ctxReq.Done():
-			localCtx.logger().Info("request context done, closing serverToClient")
 			return
 		}
 
@@ -445,14 +447,8 @@ func (webCtx *ServerContext) serverToClient(localCtx *LocalContext) {
 			Error: "",
 		}
 
-		msgJSON, err := json.Marshal(srvMsg)
-		if err != nil {
-			localCtx.closeContexts(err, "Failed to marshal server message", "Internal server error")
-			return
-		}
-
-		if err := localCtx.ws.WriteMessage(websocket.TextMessage, msgJSON); err != nil {
-			localCtx.closeContexts(err, "WebSocket write error", "Internal server error")
+		if err := localCtx.writeWsMessage(srvMsg); err != nil {
+			localCtx.closeContexts(err, "WebSocket write error - serverToClient", "Internal server error")
 			return
 		}
 	}
@@ -474,10 +470,8 @@ func (webCtx *ServerContext) clientToServer(localCtx *LocalContext) {
 		// Check if the contexts are done
 		select {
 		case <-localCtx.ctxServer.Done():
-			localCtx.logger().Info("server context done, closing clientToServer")
 			return
 		case <-localCtx.ctxReq.Done():
-			localCtx.logger().Info("request context done, closing clientToServer")
 			return
 		case <-done:
 			// read completed
