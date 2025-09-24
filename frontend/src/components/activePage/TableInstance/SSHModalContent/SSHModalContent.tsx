@@ -1,7 +1,7 @@
 import type { FC } from 'react';
 import { Typography, Space, Button } from 'antd';
 import { Link } from 'react-router-dom';
-
+import { CodeOutlined } from '@ant-design/icons';
 const { Text } = Typography;
 
 export interface ISSHModalContentProps {
@@ -34,7 +34,8 @@ const SSHModalContent: FC<ISSHModalContentProps> = ({ ...props }) => {
         rel="noopener noreferrer"
         onClick={props.onClose}
       >
-        <Button className="mt-4" type="primary" shape="round">
+        <Button className="mt-4 bg-green-600 hover:bg-green-700" type="primary" shape="round">
+          <CodeOutlined></CodeOutlined>
           Connect via browser
         </Button>
       </Link>
