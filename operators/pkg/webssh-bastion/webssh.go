@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -193,6 +194,8 @@ func (webCtx *ServerContext) wsHandler(w http.ResponseWriter, r *http.Request) {
 		if err := ws.Close(); err != nil {
 			localCtx.logger().Error(err, "Failed to close WebSocket connection")
 		}
+
+		localCtx.logger().Info("WebSocket connection closed")
 	}()
 
 	// wait for the first message to get the token
@@ -262,7 +265,7 @@ func (webCtx *ServerContext) wsHandler(w http.ResponseWriter, r *http.Request) {
 	sshConn, err := ssh.Dial("tcp", connString, sshConfig)
 	if err != nil {
 		localCtx.logger().Error(err, "Failed to establish SSH connection")
-		localCtx.errorMsg = "Internal server error"
+		localCtx.errorMsg = "Failed to establish SSH connection"
 		return
 	}
 
@@ -277,6 +280,9 @@ func (webCtx *ServerContext) wsHandler(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err := session.Close(); err != nil {
 			localCtx.logger().Error(err, "Failed to close SSH session")
+		}
+		if err := sshConn.Close(); err != nil {
+			localCtx.logger().Error(err, "Failed to close SSH connection")
 		}
 	}()
 
@@ -314,7 +320,7 @@ func (webCtx *ServerContext) wsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	localCtx.logger().Info("SSH session started")
+	localCtx.logger().Info("SSH session started, conn number: " + strconv.Itoa(int(n+1)))
 
 	localCtx.lastUsed.Store(time.Now())
 	localCtx.ctxServer, localCtx.cancelFun = context.WithCancel(context.Background())
