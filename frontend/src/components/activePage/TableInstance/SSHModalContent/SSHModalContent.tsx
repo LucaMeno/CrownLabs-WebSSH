@@ -34,7 +34,11 @@ const SSHModalContent: FC<ISSHModalContentProps> = ({ ...props }) => {
         rel="noopener noreferrer"
         onClick={props.onClose}
       >
-        <Button className="mt-4 bg-green-600 hover:bg-green-700" type="primary" shape="round">
+        <Button
+          className="mt-4 bg-green-600 hover:bg-green-700"
+          type="primary"
+          shape="round"
+        >
           <CodeOutlined></CodeOutlined>
           Connect via browser
         </Button>

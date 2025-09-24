@@ -99,7 +99,9 @@ const SSHTerminal: React.FC = () => {
       );
 
       instance.writeln('');
-      instance.writeln('\x1b[1;32m[✔] Successfully connected to server. \x1b[0m\r');
+      instance.writeln(
+        '\x1b[1;32m[✔] Successfully connected to server. \x1b[0m\r',
+      );
       instance.writeln('\x1b[1;36m📡 Connecting to VM... \x1b[0m\n');
 
       fitAndNotify();
