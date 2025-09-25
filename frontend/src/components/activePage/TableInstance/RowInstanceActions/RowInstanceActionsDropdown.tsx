@@ -153,6 +153,7 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
                   disabled={sshDisabled}
                   type="link"
                   className="ml-3"
+                  color="primary"
                   variant="solid"
                   shape="circle"
                   size="small"
