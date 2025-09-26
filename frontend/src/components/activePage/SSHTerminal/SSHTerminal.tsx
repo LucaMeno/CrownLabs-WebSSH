@@ -78,8 +78,6 @@ const SSHTerminal: React.FC = () => {
     // --- WebSocket ---
     const PROT = location.protocol === 'https:' ? 'wss' : 'ws';
     const URL = location.host; // PRODUCTION
-    // const URL = 'localhost:8090' // LOCAL - backend running on localhost
-    // const URL = '950.staging.crownlabs.polito.it:80'; // STAGING
 
     const socketUrl = `${PROT}://${URL}/webssh`;
     const ws = new WebSocket(socketUrl);
