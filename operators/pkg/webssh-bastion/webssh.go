@@ -69,6 +69,7 @@ type LocalContext struct {
 	stdin       io.WriteCloser     // stdin pipe for the SSH session
 	stdout      io.Reader          // stdout pipe for the SSH session
 	mtxWs       sync.Mutex         // mutex for WebSocket write operations
+	isWsClosed  atomic.Bool        // indicates if the WebSocket is closed
 }
 
 // clientMessage represents a message from the client to the server.
@@ -162,7 +163,9 @@ func (webCtx *ServerContext) wsHandler(w http.ResponseWriter, r *http.Request) {
 		stdin:       nil,
 		stdout:      nil,
 		mtxWs:       sync.Mutex{},
+		isWsClosed:  atomic.Bool{},
 	}
+	localCtx.isWsClosed.Store(false)
 
 	// check the number of connection
 	n := atomic.LoadInt32(&webCtx.activeConnCount)
@@ -176,22 +179,24 @@ func (webCtx *ServerContext) wsHandler(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		atomic.AddInt32(&webCtx.activeConnCount, -1)
 
-		if localCtx.errorMsg != "" {
-			// send the error message to the client
-			srvMsg := serverMessage{
-				Type:  "error",
-				Data:  "",
-				Error: localCtx.errorMsg,
+		if !localCtx.isWsClosed.Load() {
+			if localCtx.errorMsg != "" {
+				// send the error message to the client
+				srvMsg := serverMessage{
+					Type:  "error",
+					Data:  "",
+					Error: localCtx.errorMsg,
+				}
+
+				if err := localCtx.writeWsMessage(srvMsg); err != nil {
+					localCtx.logger().Error(err, "WebSocket write error - defer")
+				}
 			}
 
-			if err := localCtx.writeWsMessage(srvMsg); err != nil {
-				localCtx.logger().Error(err, "WebSocket write error - defer")
-			}
-		}
-
-		if err := ws.Close(); err != nil {
-			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-				localCtx.logger().Error(err, "Failed to close WebSocket connection - defer")
+			if err := ws.Close(); err != nil {
+				if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+					localCtx.logger().Error(err, "Failed to close WebSocket connection - defer")
+				}
 			}
 		}
 
@@ -345,7 +350,11 @@ func (webCtx *ServerContext) wsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (localCtx *LocalContext) closeContexts(err error, logMsg, logForUser string) {
-	localCtx.logger().Error(err, logMsg)
+	if err != nil {
+		localCtx.logger().Error(err, logMsg)
+	} else {
+		localCtx.logger().Info(logMsg)
+	}
 	localCtx.errorMsg = logForUser
 	localCtx.cancelFun()
 }
@@ -432,7 +441,8 @@ func (webCtx *ServerContext) serverToClient(localCtx *LocalContext) {
 		}
 
 		if n == 0 {
-			localCtx.closeContexts(io.EOF, "SSH session closed", "SSH session closed")
+			// SSH session closed by user (exit, logout, ...)
+			localCtx.closeContexts(nil, "SSH session closed by remote host", "SSH session closed")
 			return
 		}
 
@@ -478,7 +488,12 @@ func (webCtx *ServerContext) clientToServer(localCtx *LocalContext) {
 		}
 
 		if err != nil {
-			localCtx.closeContexts(err, "Closing SSH session, WebSocket read error", "Internal server error")
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				localCtx.closeContexts(nil, "WebSocket closed by client", "")
+				localCtx.isWsClosed.Store(true)
+			} else {
+				localCtx.closeContexts(err, "WebSocket read error", "Internal server error")
+			}
 			return
 		}
 
